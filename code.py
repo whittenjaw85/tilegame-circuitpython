@@ -13,57 +13,55 @@ from adafruit_display_shapes.rect import Rect
 import keypad
 
 
-#setup display
-display = board.DISPLAY
-group = displayio.Group(scale=1)
+'''
+    Creates the image data for each image
+'''
+def create_data(image):
+    global image_mover
+    global group
+    
+    sprite_sheet = None
+    palette = None
+    image_mover = None
+    sprite_sheet, palette = adafruit_imageload.load(image, bitmap=displayio.Bitmap, palette=displayio.Palette)
 
+    image_mover = displayio.TileGrid(sprite_sheet, pixel_shader=palette,
+                    width = 5,
+                    height = 4,
+                    tile_width = 32, 
+                    tile_height = 32)
+                    
+    mixlist = list(range(20))
+    for i in range(20):
+        image_mover[i] = i
+        
+    
+    
+    #groupstack so the game makes sense
+    imagegroup = displayio.Group(scale = 1)
+    imagegroup.append(image_mover)
 
-#create image mixer
-sprite_sheet, palette = adafruit_imageload.load("numbers.bmp", bitmap=displayio.Bitmap, palette=displayio.Palette)
+    group.append(imagegroup)
+    mixup_image(gamelevel)
 
-image_mover = displayio.TileGrid(sprite_sheet, pixel_shader=palette,
-                width = 5,
-                height = 4,
-                tile_width = 32, 
-                tile_height = 32)
-
-
-#randomize image panels
-# mixlist = list(range(20))
-# for i in range(20):
-#     r = random.randint(0, len(mixlist)-1)
-#     #print(r)
-#     image_mover[i] = mixlist[r]
-#     #print(mixlist)
-#     mixlist.pop(r)
-
-mixlist = list(range(20))
-for i in range(20):
-    image_mover[i] = i
+def draw_highlight():
+    global rectpos
+    global highlightgroup
+    
+    #highlight the moving position 
+    rectangle_m = Rect(0, 0, 32, 32, fill = 0x000000)
+    highlightgroup = displayio.Group(scale = 1)
+    highlightgroup.append(rectangle_m)
+    group.append(highlightgroup)
+    
+    highlightgroup.x = (rectpos%5)*32
+    highlightgroup.y = int(rectpos/5)*32
+    
     
 
-#highlight the moving position 
-rectangle_m = Rect(0, 0, 32, 32, fill = 0x000000)
-rectpos = int(0)
-
-
-#groupstack so the game makes sense
-imagegroup = displayio.Group(scale = 1)
-imagegroup.append(image_mover)
-
-highlightgroup = displayio.Group(scale = 1)
-highlightgroup.append(rectangle_m)
-
-group.append(imagegroup)
-group.append(highlightgroup)
-
-display.root_group = group
-
-group.x = 0
-group.y = 0
-
-led = digitalio.DigitalInOut(board.LED)
-led.direction = digitalio.Direction.OUTPUT
+    
+def create_game_win():
+    pm.show_win()
 
 #setup keypad events
 k = keypad.ShiftRegisterKeys(
@@ -84,8 +82,6 @@ def swap_right():
     
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
-    
-    calc_position_highlight(rectpos)
 
 def swap_left():
     global rectpos
@@ -97,7 +93,6 @@ def swap_left():
         
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
-    calc_position_highlight(rectpos)
     
 def swap_down():
     global rectpos
@@ -107,7 +102,6 @@ def swap_down():
     
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
-    calc_position_highlight(rectpos)
     
 
 def swap_up():
@@ -120,18 +114,54 @@ def swap_up():
         
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
-    calc_position_highlight(rectpos)
 
-    
-def calc_position_highlight(rectpos):
+
+def update_highlight():
     global highlightgroup
+    global rectpos
     highlightgroup.x = (rectpos%5)*32
     highlightgroup.y = int(rectpos/5)*32
+
+def mixup_image(level):
+    global rectpos 
+    rectpos = random.randint(0, 20)
     
+    mixlist = (0,1,2,3)
+    for i in range((level+2)*5):
+        r = random.choice(mixlist)
+        if r == 0:
+            swap_right()
+        elif r == 1:
+            swap_left()
+        elif r == 2:
+            swap_up()
+        elif r == 3:
+            swap_down()
+        
+        time.sleep(0.05)
+        
 def show_level_up():
+    global gamestate
+    global group
+    global imagelist
+    global gamelevel
+    
+    hlg = group.pop()
     pm.show_level_up()
+    group.pop()
     
+    gamelevel += 1
     
+    if gamelevel == 5:
+        create_game_win()
+    else:    
+        create_data(imagelist[gamelevel])
+    
+    gamestate = PLAYING
+    group.append(hlg)
+    
+   
+
 
 #setup neopixel strand for timer
 GREEN = (0, 255, 0)
@@ -144,11 +174,34 @@ PLAY = 0
 class PixelManager(object):
     def __init__(self):
         self.level = 0
+        self.pixels = neopixel.NeoPixel(board.NEOPIXEL, 5, brightness=0.02, auto_write=False)
+        self.show_level(self.level)
+        
+    def clear(self):
+        for i in range(5):
+            self.pixels[i] = (0,0,0)
+            
+        self.pixels.show()
         
     def show_level_up(self):
-        self.s
+        self.level = self.level + 1
+        for i in range(5):
+            self.show_level(i)
+            time.sleep(0.5)
+            
+        self.show_level(self.level)
+        time.sleep(1)
+        
+    def show_win(self):
+        self.pixels.brightness = 0.2
+        self.clear()
+        while(True):
+            for i in range(5):
+                self.show_level(i)
+                time.sleep(0.1)
         
     def show_level(self, level):
+        self.clear()
         if level == 0:
             self.pixels[0] = RED
         if level == 1:
@@ -171,14 +224,14 @@ class PixelManager(object):
             self.pixels[4] = GREEN
             
         self.pixels.show()
-        
-        
 
-pm = PixelManager()
+
 
 def check_win():
     global image_mover
     global rectpos
+    global gamestate
+    
     vals = list()
     for i in range(20):
         vals.append(image_mover[i])
@@ -192,9 +245,40 @@ def check_win():
             return
     
     
+    gamestate = LEVELUP
     show_level_up()
     
+
+    
+#setup game variables
+PLAYING = 0
+LEVELUP = 1
+gamestate = PLAYING
+gamelevel = 0
+
+#setup display
+display = board.DISPLAY
+group = displayio.Group(scale=1)
+
+#create image mixer
+imagelist = ["numbers.bmp", "dogfire.bmp", "camelkiss.bmp", "turtlefris.bmp", "cowview.bmp"]
+
+sprite_sheet = None
+image_mover = None
+highlightgroup = None
+imagegroup = None
+rectpos = int(0)
+
 timepiece = time.time()
+
+display.root_group = group
+
+group.x = 0
+group.y = 0
+create_data(imagelist[0]) 
+draw_highlight()
+
+pm = PixelManager()
         
 while True:
     event = k.events.get()
@@ -208,9 +292,13 @@ while True:
                 swap_down()
             if event.key_number == 7:
                 swap_right()
+                
+            update_highlight()
           
     if time.time() - timepiece > 1:
-        check_win()
-        timepiece = time.time()
+        if gamestate == PLAYING:
+            check_win()
+            timepiece = time.time()
                 
     
+
