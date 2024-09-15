@@ -12,7 +12,6 @@ from adafruit_display_shapes.rect import Rect
 
 import keypad
 
-
 '''
     Creates the image data for each image
 '''
@@ -44,6 +43,47 @@ def create_data(image):
     group.append(imagegroup)
     mixup_image(gamelevel)
 
+def animate_wrongmove():
+    rect = Rect(0, 0, 160, 128, fill=0xff0000)
+    tempgroup = displayio.Group(scale=1)
+    tempgroup.append(rect)
+    group.append(tempgroup)
+
+    time.sleep(0.1)
+
+    group.pop()
+
+def animate_highlight(startpos, endpos):
+    global rectpos
+    rect = Rect(0, 0, 32, 32, outline=0xff0000)
+    tempgroup = displayio.Group(scale = 1)
+    tempgroup.append(rect)
+    group.append(tempgroup)
+
+    tempgroup.x = (startpos%5)*32
+    tempgroup.y = int(startpos/5)*32
+
+    endposx = int(endpos%5)*32
+    endposy = int(endpos/5)*32
+
+    while tempgroup.x != endposx or tempgroup.y != endposy:
+        if endposx > tempgroup.x:
+            tempgroup.x += 1
+        elif endposx < tempgroup.x:
+            tempgroup.x -= 1
+
+        if endposy > tempgroup.y:
+            tempgroup.y += 1
+        elif endposy < tempgroup.y:
+            tempgroup.y -= 1
+
+        time.sleep(0.005)
+
+    group.pop()
+
+
+
+
 def draw_highlight():
     global rectpos
     global highlightgroup
@@ -57,8 +97,6 @@ def draw_highlight():
     highlightgroup.x = (rectpos%5)*32
     highlightgroup.y = int(rectpos/5)*32
     
-    
-
     
 def create_game_win():
     pm.show_win()
@@ -77,9 +115,13 @@ def swap_right():
     global image_mover
     oldpos = rectpos
     oldval = image_mover[oldpos]
+    if (rectpos+1)%5 == 0:
+        animate_wrongmove()
+        return
+    else:
+        rectpos = (rectpos+1)
     
-    rectpos = (rectpos+1)%20
-    
+    animate_highlight(rectpos, oldpos)
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
 
@@ -87,10 +129,15 @@ def swap_left():
     global rectpos
     oldpos = rectpos
     oldval = image_mover[oldpos]
-    rectpos = (rectpos-1)
+    if rectpos%5 == 0:
+        animate_wrongmove()
+        return
+    else:
+        rectpos = (rectpos-1)
     if rectpos < 0:
         rectpos = rectpos+20
         
+    animate_highlight(rectpos, oldpos)
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
     
@@ -98,7 +145,12 @@ def swap_down():
     global rectpos
     oldpos = rectpos
     oldval = image_mover[oldpos]
-    rectpos = (rectpos+5)%20
+    if (rectpos+5) >= 20:
+        animate_wrongmove()
+        return
+    else:
+        rectpos = (rectpos+5)
+    animate_highlight(rectpos, oldpos)
     
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
@@ -108,13 +160,15 @@ def swap_up():
     global rectpos
     oldpos = rectpos
     oldval = image_mover[oldpos]
-    rectpos = (rectpos-5)
-    if rectpos < 0:
-        rectpos = rectpos+20
+    if rectpos - 5 < 0:
+        animate_wrongmove()
+        return
+    else: 
+        rectpos = (rectpos-5)
         
+    animate_highlight(rectpos, oldpos)
     image_mover[oldpos] = image_mover[rectpos]
     image_mover[rectpos] = oldval
-
 
 def update_highlight():
     global highlightgroup
@@ -160,8 +214,6 @@ def show_level_up():
     gamestate = PLAYING
     group.append(hlg)
     
-   
-
 
 #setup neopixel strand for timer
 GREEN = (0, 255, 0)
@@ -169,8 +221,6 @@ YELLOW = (255, 100, 0)
 ORANGE = (200, 150, 0)
 PINK = (100, 0, 100)
 RED = (255, 0, 0)
-LEVELUP = 1
-PLAY = 0
 class PixelManager(object):
     def __init__(self):
         self.level = 0
