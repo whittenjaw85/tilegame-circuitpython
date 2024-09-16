@@ -193,6 +193,8 @@ def mixup_image(level):
             swap_down()
         
         time.sleep(0.05)
+
+    update_highlight()
         
 def show_level_up():
     global gamestate
